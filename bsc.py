@@ -2,12 +2,16 @@ import numpy as np
 from scipy.constants import hbar
 from scipy.integrate import solve_ivp
 import matplotlib.pyplot as plt
-def H_s(j):  
-    h = j* np.array([[1,0,0,0], [0,-1,2,0], [0,2,-1,0], [0,0,0,1]])
-    return h
+# def H_s(j):  
+#     h = j* np.array([[1,0,0,0], [0,-1,2,0], [0,2,-1,0], [0,0,0,1]])
+#     return h
 
-s_00 = np.array([[1], [0], [0], [0]]) 
-s_11 = np.array([[0], [0], [0], [1]])  
+B = 0.4
+J = 0.5
+Hs = [[B,0,0,0], [0,J,0,0], [0,0,-J,0], [0,0,0,-B]]
+
+s_11 = np.array([[1], [0], [0], [0]]) 
+s_00 = np.array([[0], [0], [0], [1]])  
 s_01 = np.array([[0], [1], [0], [0]])  
 s_10 = np.array([[0], [0], [1], [0]])  
 
@@ -15,11 +19,12 @@ s_p = (1/np.sqrt(2)) * (s_01 + s_10)
 s_m = (1/np.sqrt(2)) * (s_01 - s_10)  
 
 alls = [s_00, s_11, s_p, s_m]
-def L(i,j):
-    f = alls[i]
-    b = alls[j]
-    op = np.array(f @ b.T)
-    return op 
+print('length', len(alls))
+# def L(i,j):
+#     f = alls[i]
+#     b = alls[j]
+#     op = np.array(f @ b.T)
+#     return op 
 c1=c2=c3=c4=0.5
 den = np.array([
     [abs(c1)**2, c1 * np.conj(c3), c1 * np.conj(c3), c1 * np.conj(c2)],
@@ -27,6 +32,18 @@ den = np.array([
     [np.conj(c1) * c3, np.conj(c3) * c4, abs(c3)**2, c3 * np.conj(c2)],
     [np.conj(c1) * c2, np.conj(c3) * c2, np.conj(c3) * c2, abs(c2)**2]
 ])
+
+init = np.zeros((4,4))
+def assign_val(matrix, row, column, value):
+    matrix[row][column] = value 
+    return matrix 
+L_10 = assign_val(init,0,3,1)
+L_p0 = assign_val(init,1,3,1)
+L_m0 = assign_val(init,2,3,1)
+L_1m = assign_val(init,2,0,1)
+L_pm = assign_val(init,1,2,1)
+L_1p = assign_val(init,0,1,1)
+Ls = np.array([[init,L_1p.T,L_1m.T,L_10.T],[L_1p,init,L_pm.T,L_p0.T],[L_1m,L_pm,init,L_m0.T],[L_10,L_p0,L_m0,init]])
 
 def boson_lower(n_dim):
     """Bosonic lowering operator b_k."""
@@ -54,11 +71,41 @@ def bath_state(n, n_dim):
     
     return state if len(n) > 1 else state[:, 0] 
 
+I = np.eye(2)
+sigma_x = np.array([[0, 1], [1, 0]])
+sigma_z = np.array([[1,0],[0,-1]])
+# Define sigma_x1 (acts on first qubit) and sigma_x2 (acts on second qubit)
+sigma_x1 = np.kron(sigma_x, I)  # σ_x1 = σ_x ⊗ I
+sigma_x2 = np.kron(I, sigma_x)  # σ_x2 = I ⊗ σ_x
+sigma_x1x2 = np.kron(sigma_x, sigma_x)
+sigma_z1 = np.kron(sigma_z, I)
+
+####UNCOMMENT TO TEST THE PAULI TENSORS######
+# s_test = s_11  # |11> state
+
+# s_x1 = sigma_x1 @ s_test  
+# s_x2 = sigma_x2 @ s_test    
+# s_x1x2 = sigma_x1x2 @ s_test    
+
+a=b=c=d=1
+Hi =  (a*sigma_x1)+(b*sigma_x2)+(c*sigma_x1x2)+(d*sigma_z1)
+def trans_m(initial, final):
+    return final.T.conj() @ Hi @ initial
+
+####UNCOMMENT TO TEST THE SYS-SYS H_INT####
+# rate_11_01 = trans_m(s_11, s_01)
+# rate_11_10 = trans_m(s_11, s_10)
+# rate_11_00 = trans_m(s_11, s_00)
+# rate_p_m = trans_m(s_p, s_m)
+# print('trans |11> to |01>', rate_11_01)
+# print('trans |11> to |10>', rate_11_10)
+# print('trans |11> to |00>', rate_11_00)
+# print('trans |+> to |->', rate_p_m)
 def rate(i,j, n_dim, n_k, n_k_prime, T):
-    sys = np.array([[2,0,0,0], [0,0,0,0], [0,0,0,0], [0,0,0,-2]])
-    ini = alls[i].T @ (sys @ alls[j])
-
-
+    # sys = np.array([[2,0,0,0], [0,0,0,0], [0,0,0,0], [0,0,0,-2]])
+    # ini = alls[i].T @ (sys @ alls[j])
+    trans_ij = trans_m(alls[j], alls[i])
+    print(alls[j], 'to', alls[i], 'amp', trans_ij)
     w = np.random.uniform(0, 1, n_dim)
     lamb = np.sqrt(w)
     b = boson_lower(n_dim)
@@ -71,31 +118,19 @@ def rate(i,j, n_dim, n_k, n_k_prime, T):
         # Add contributions (raising + lowering)
         boson_sum += lamb[mode] * (lower_inner + raise_inner)
     
-    tot = -0.5 * hbar * ini * boson_sum 
+    tot = -0.5 * hbar * trans_ij * boson_sum 
     want = np.abs(tot)**2
 
     coup = 0.05
     w_cut = max(w)
-    for m in range(0,len(alls[i])):
-        num = H_s(0.5) @ alls[i]
-        if num[m] !=0:
-            Ei = num[m]/alls[i][m]
-        else:
-            continue 
-    for n in range(0,len(alls[j])):
-        num = H_s(0.5) @ alls[j]
-        if num[n] !=0:
-            Ej = num[n]/alls[j][n]
-        else:
-            continue 
 
-    eigenvalues, _ = np.linalg.eigh(H_s(0.5))
+    eigenvalues, _ = np.linalg.eigh(Hs)
     Ei, Ej = eigenvalues[i], eigenvalues[j]
     wij = (Ei - Ej) / hbar
     kb = 1.380649e-23
     dist = 1/(np.exp((hbar*wij)/(kb*T))-1)
     D = 2*coup*wij*np.exp(-1*(wij/w_cut))
-    print('i eignevect', _[i], 'j eigenvect', _[j])
+    print('i eignevect', _[i], 'i eigneval', Ei, 'j eigenvect', _[j],'j eigenval', Ej )
     return 2*np.pi*want*D*dist 
 
 
@@ -103,14 +138,15 @@ def dissipt(g,l,n_dim, n_k, n_k_prime, T):
     sum = 0
     for i in range(0,g):
         for j in range(0,l):
-            print('Lij', L(i,j))
-            sim = L(i,j) @ den @ L(i,j).T.conj()
-            anti = (L(i,j).T.conj() @ L(i,j) @ den) + (den @ L(i,j).T.conj() @ L(i,j))
+            print('Lij', Ls[i][j])
+            jump = Ls[i][j]
+            sim = jump @ den @ jump.T.conj()
+            anti = (jump.T.conj() @ jump @ den) + (den @ jump.T.conj() @ jump)
             tot = rate(i,j,n_dim, n_k, n_k_prime, T) * (sim - (0.5*anti))
             sum += tot
     return sum
 def whole(g,l,n_dim, n_k, n_k_prime, T):
-    ev = (-1*complex(0,1)/hbar)*((H_s @ den) - (den @ H_s)) + dissipt(g,l,n_dim, n_k, n_k_prime, T)
+    ev = (-1j/hbar)*((Hs @ den) - (den @ Hs)) + dissipt(g,l,n_dim, n_k, n_k_prime, T)
     return ev
 
 
@@ -119,7 +155,7 @@ def lindblad_rhs(t, rho_flat, g, l, n_dim, n_k, n_k_prime, T):
     rho = rho_flat.reshape((4, 4))
     
     # Compute RHS
-    hamiltonian_term = (-1j / hbar) * (H_s(0.5) @ rho - rho @ H_s(0.5))
+    hamiltonian_term = (-1j / hbar) * (Hs @ rho - rho @ Hs)
     dissipator_term = dissipt(g, l, n_dim, n_k, n_k_prime, T)
     drho_dt = hamiltonian_term + dissipator_term
     
@@ -167,7 +203,3 @@ plt.ylabel('Coherence')
 plt.title('Coherence Over Time')
 plt.legend()
 plt.show()
-        
-        
-
-
