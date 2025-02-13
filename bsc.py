@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 B = 0.4
 J = 0.5
 Hs = [[B,0,0,0], [0,J,0,0], [0,0,-J,0], [0,0,0,-B]] #Hs = System Hamiltonian
-
+Eigenvals = np.array([
 s_11 = np.array([[1], [0], [0], [0]]) # |11>
 s_00 = np.array([[0], [0], [0], [1]]) # |00>
 s_10 = np.array([[0], [1], [0], [0]]) # |10>
@@ -34,42 +34,43 @@ den = np.array([
 ])  # Initial density matrix
 
 init = np.zeros((4,4))
-def assign_val(matrix, row, column, value):
-    matrix[row][column] = value 
+def assign_val(row, column, value):
+    matrix = np.zeros((4,4))
+    matrix[row][column] = 1
     return matrix 
-L_10 = assign_val(init,0,3,1)
-L_p0 = assign_val(init,1,3,1)
-L_m0 = assign_val(init,2,3,1)
-L_1m = assign_val(init,2,0,1)
-L_pm = assign_val(init,1,2,1)
-L_1p = assign_val(init,0,1,1)
+L_10 = assign_val(0,3)
+L_p0 = assign_val(1,3
+L_m0 = assign_val(2,3)
+L_1m = assign_val(0,2)
+L_pm = assign_val(1,2)
+L_1p = assign_val(0,1)
 Ls = np.array([[init,L_1p.T,L_1m.T,L_10.T],[L_1p,init,L_pm.T,L_p0.T],[L_1m,L_pm,init,L_m0.T],[L_10,L_p0,L_m0,init]]) #Jump Operators. Rows run as 1 to 1, + to 1 - to 1 etc with order 1,+,-,0
 
-def boson_lower(n_dim):   #Function operates the boson lowering operator [rmbr to add BlackBoady Dist]
-    """Bosonic lowering operator b_k."""
-    b = np.zeros((n_dim, n_dim))
-    for n in range(1, n_dim):
-        b[n-1, n] = np.sqrt(n)
-    return b
+# def boson_lower(n_dim):   #Function operates the boson lowering operator [rmbr to add BlackBoady Dist]
+#     """Bosonic lowering operator b_k."""
+#     b = np.zeros((n_dim, n_dim))
+#     for n in range(1, n_dim):
+#         b[n-1, n] = np.sqrt(n)
+#     return b
 
-def boson_raise(n_dim): #Function operates the boson raising operator [rmbr to add BlackBoady Dist]
-    """Bosonic raising operator b_k^dagger."""
-    b_dag = np.zeros((n_dim, n_dim))
-    for n in range(n_dim-1):
-        b_dag[n+1, n] = np.sqrt(n + 1)
-    return b_dag
+# def boson_raise(n_dim): #Function operates the boson raising operator [rmbr to add BlackBoady Dist]
+#     """Bosonic raising operator b_k^dagger."""
+#     b_dag = np.zeros((n_dim, n_dim))
+#     for n in range(n_dim-1):
+#         b_dag[n+1, n] = np.sqrt(n + 1)
+#     return b_dag
 
 # Define bath states |n_k>
-def bath_state(n, n_dim):
-    """Returns number state |n_k> as a matrix, handling scalar or array input."""
-    state = np.zeros((n_dim, len(np.atleast_1d(n))))  # Handle both scalar and array
-    n = np.atleast_1d(n).astype(int)  # Ensure integer array
+# def bath_state(n, n_dim):
+#     """Returns number state |n_k> as a matrix, handling scalar or array input."""
+#     state = np.zeros((n_dim, len(np.atleast_1d(n))))  # Handle both scalar and array
+#     n = np.atleast_1d(n).astype(int)  # Ensure integer array
 
-    for i, nk in enumerate(n):  # Iterate over array elements
-        if 0 <= nk < n_dim:  # Ensure valid index range
-            state[nk, i] = 1
+#     for i, nk in enumerate(n):  # Iterate over array elements
+#         if 0 <= nk < n_dim:  # Ensure valid index range
+#             state[nk, i] = 1
     
-    return state if len(n) > 1 else state[:, 0] 
+#     return state if len(n) > 1 else state[:, 0] 
 
 I = np.eye(2) #2D identity
 sigma_x = np.array([[0, 1], [1, 0]]) #2D simga_x
@@ -110,23 +111,23 @@ def rate(i,j, n_dim, n_k, n_k_prime, T):  #Solve for gamma_ij by Fermi Golden Ru
     lamb = np.sqrt(w) # w and lamb are placeholder, will change to 1/n 
 
     ### This whole part is <n_k|b_k b_k†|n_k'>
-    b = boson_lower(n_dim)
-    b_dag = boson_raise(n_dim)
-    boson_sum = 0
-    ### Sum over k modes
-    for mode in range(n_dim):
-        lower_inner = bath_state(n_k_prime[mode], n_dim).T @ b @ bath_state(n_k[mode], n_dim)
-        raise_inner = bath_state(n_k_prime[mode], n_dim).T @ b_dag @ bath_state(n_k[mode], n_dim)
+    # b = boson_lower(n_dim)
+    # b_dag = boson_raise(n_dim)
+    # boson_sum = 0
+    # ### Sum over k modes
+    # for mode in range(n_dim):
+    #     lower_inner = bath_state(n_k_prime[mode], n_dim).T @ b @ bath_state(n_k[mode], n_dim)
+    #     raise_inner = bath_state(n_k_prime[mode], n_dim).T @ b_dag @ bath_state(n_k[mode], n_dim)
         
-        # Add contributions (raising + lowering)
-        boson_sum += lamb[mode] * (lower_inner + raise_inner)
+    #     # Add contributions (raising + lowering)
+    #     boson_sum += lamb[mode] * (lower_inner + raise_inner)
     
-    tot = -0.5 * hbar * trans_ij * boson_sum 
+    tot = -0.5 * hbar * trans_ij 
     want = np.abs(tot)**2 ## Mod2 of Fermi Golden Rule
 
-    coup = 0.05
-    w_cut = max(w) #Cutoff freq. Change when introduce 1/n
-
+    # coup = 0.05
+    # w_cut = max(w) #Cutoff freq. Change when introduce 1/n
+    w_cut=5000 #placeholder
     eigenvalues, _ = np.linalg.eigh(Hs)
     Ei, Ej = eigenvalues[i], eigenvalues[j] #To re-affirm correct eigenvects,vals. Everything is coming out correct as of last update
     wij = (Ei - Ej) / hbar # freq for spectral ednsity
