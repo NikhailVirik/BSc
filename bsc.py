@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 B = 0.4
 J = 0.5
 Hs = [[B,0,0,0], [0,J,0,0], [0,0,-J,0], [0,0,0,-B]] #Hs = System Hamiltonian
-Eigenvals = np.array([
+Eigenvals = np.array([B,J,-J,-B])
 s_11 = np.array([[1], [0], [0], [0]]) # |11>
 s_00 = np.array([[0], [0], [0], [1]]) # |00>
 s_10 = np.array([[0], [1], [0], [0]]) # |10>
@@ -128,13 +128,13 @@ def rate(i,j, n_dim, n_k, n_k_prime, T):  #Solve for gamma_ij by Fermi Golden Ru
     # coup = 0.05
     # w_cut = max(w) #Cutoff freq. Change when introduce 1/n
     w_cut=5000 #placeholder
-    eigenvalues, _ = np.linalg.eigh(Hs)
-    Ei, Ej = eigenvalues[i], eigenvalues[j] #To re-affirm correct eigenvects,vals. Everything is coming out correct as of last update
+    
+    Ei, Ej = Eigenvals[i], Eigenvals[j] #To re-affirm correct eigenvects,vals. Everything is coming out correct as of last update
     wij = (Ei - Ej) / hbar # freq for spectral ednsity
     kb = 1.380649e-23
     dist = 1/(np.exp((hbar*wij)/(kb*T))-1) #Bose-Eistien dit
     D = 2*coup*wij*np.exp(-1*(wij/w_cut))
-    print('i eignevect', _[i], 'i eigneval', Ei, 'j eigenvect', _[j],'j eigenval', Ej )
+    print('i eigneval', Ei,'j eigenval', Ej )
     return 2*np.pi*want*D*dist 
 
 ###solves for Σ_ij (gamma_ij ( L_ij p L†_ij  -  1/2{L_ijL†_ij,p}))
