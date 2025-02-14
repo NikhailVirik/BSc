@@ -3,5 +3,5 @@
 rules:
 
 1. explicit variables
-2. comments intensively
-3. COMMENTS EVERYTHING
+2. comment if necessary
+3. do not go insane
