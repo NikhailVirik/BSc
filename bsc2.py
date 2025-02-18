@@ -79,13 +79,15 @@ k3 = np.random.uniform(0,1)
 k4 = np.random.uniform(0,1)
 # C_x2 = C_p0 + C_1p - C_m0 + C_1m 
 # C_x1 = C_p0 + C_1p + C_m0 - C_1m
-
-
 H_int = (x1) + (2*x2) + (x1x2) + (z1)
+H_int_t = QobjEvo([x1,])
 print('x1',x1)
 alpha = 0.05
 w_c = 2
 T=3
+for t_idx, t in enumerate(times):
+    k1, k2, k3, k4 = np.random.uniform(0, 1, 4)
+
 c_ops = []
 for i in range(0,len(states)):
     for j in range(0,len(states)):
@@ -332,6 +334,7 @@ plt.ylabel('heat flow')
 plt.title('heat flow')
 plt.grid()
 plt.show()
+
 
 
 
