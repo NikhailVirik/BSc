@@ -151,7 +151,6 @@ rho_0 = ket2dm(initial_pure)
 
 hamiltonian = hamiltonian_system(magnetic_strength, qq_coupling)
 
-rho_data_test = np.zeros(len(times)) # trace the density matrix
 coeff_11_test = np.zeros(len(times)) # trace the probability in |11>
 coeff_sym_test = np.zeros(len(times)) # trace the probability in |+>
 coeff_anti_test = np.zeros(len(times)) # trace the probability in |->
@@ -159,7 +158,7 @@ coeff_00_test = np.zeros(len(times)) # trace the probability in |00>
 coeff_rand_off_diag_test = np.zeros(len(times)) # trace a random off diagonal element in density matrix [0,2]
 ther_concur_test = np.zeros(len(times)) # trace the thermal concurrence
 
-rho_data_test[0] = rho_0 
+rho_data_test = [rho_0] 
 coeff_11_test[0] = .25 
 coeff_sym_test[0] = .5 
 coeff_anti_test[0] = 0 
@@ -169,8 +168,8 @@ ther_concur_test[0] = thermal_concurrence(rho_0)
 
 
 # without energy diff
-rho_data_ori = np.zeros(len(times)) # trace the density matrix
-heat_flow_ori = np.zeros(len(times)) # trace the hear flow in the process
+
+
 coeff_11_ori = np.zeros(len(times)) # trace the probability in |11>
 coeff_sym_ori = np.zeros(len(times)) # trace the probability in |+>
 coeff_anti_ori = np.zeros(len(times)) # trace the probability in |->
@@ -178,14 +177,13 @@ coeff_00_ori = np.zeros(len(times)) # trace the probability in |00>
 coeff_rand_off_diag_ori = np.zeros(len(times)) # trace a random off diagonal element in density matrix [0,2]
 ther_concur_ori = np.zeros(len(times)) # trace the thermal concurrence
 
-rho_data_ori[0] = rho_0 # trace the density matrix
-heat_flow_ori[0] = 0 # trace the hear flow in the process
-coeff_11_ori[0] = .25 # trace the probability in |11>
-coeff_sym_ori[0] = .5 # trace the probability in |+>
-coeff_anti_ori[0] = 0 # trace the probability in |->
-coeff_00_ori[0] = .25 # trace the probability in |00>
-coeff_rand_off_diag_ori[0] = rho_0[0,2] # trace a random off diagonal element in density matrix [0,2]
-ther_concur_ori[0] = thermal_concurrence(rho_0) # trace the thermal concurrence
+rho_data_ori = [rho_0] # trace the density matrix
+coeff_11_ori[0] = .25 
+coeff_sym_ori[0] = .5 
+coeff_anti_ori[0] = 0 
+coeff_00_ori[0] = .25 
+coeff_rand_off_diag_ori[0] = rho_0[0,2] 
+ther_concur_ori[0] = thermal_concurrence(rho_0) 
 
 #start with steady energy state
 c_ops_steady_state = dissipator(hamiltonian, 1, temp_test)
@@ -200,7 +198,7 @@ print('expected energy at initial state:', energy_0)
 for i_time in tqdm(range(1, len(times)), desc = 'energy diff lindbladian'):
 
     # update the current state expected energy of the qubits system
-    energy_current = expect(hamiltonian, rho_data_test[i_time])
+    energy_current = expect(hamiltonian, rho_data_test[i_time-1])
     scaling = 1 + constant * (energy_current - energy_ss) **2
     c_ops = dissipator(hamiltonian, scaling, temp_test)
 
@@ -210,7 +208,7 @@ for i_time in tqdm(range(1, len(times)), desc = 'energy diff lindbladian'):
     rho_t = solver.step(times[i_time])
     
     # update the data
-    rho_data_test[i_time] = rho_t
+    rho_data_test.append(rho_t)
     coeff_11_test[i_time] = np.abs(rho_t[0][0])
     coeff_sym_test[i_time] = np.abs(rho_t[1][1])
     coeff_anti_test[i_time] = np.abs(rho_t[2][2])
@@ -225,7 +223,7 @@ d_prob_sym = coeff_sym_test[2:] - coeff_sym_test[:-2]
 d_prob_anti = coeff_anti_test[2:] - coeff_anti_test[:-2]
 d_prob_00 = coeff_00_test[2:] - coeff_00_test[:-2]
 ham_sys_eigenval = hamiltonian.diag()
-heat_flow_test = ham_sys_eigenval[0]*d_prob_11 + ham_sys_eigenval[1]*d_prob_sym + ham_sys_eigenval[2]*d_prob_anti + ham_sys_eigenval[3]*d_prob_00
+heat_flow_test = (ham_sys_eigenval[0]*d_prob_11 + ham_sys_eigenval[1]*d_prob_sym + ham_sys_eigenval[2]*d_prob_anti + ham_sys_eigenval[3]*d_prob_00) / (2 * timestep)
 heat_flow_time = times[1:-1]
 
 energy_final = expect(hamiltonian,rho_data_test[-1])
@@ -269,26 +267,19 @@ c_ops = dissipator(hamiltonian, 1, temp_test)
 solver = MESolver(hamiltonian, c_ops=c_ops)
 solver.start(rho_0, times[0])
 
-for i_time in tqdm(range(0, len(times)), desc = 'constant rate lindbladian'):
-    if i_time == len(times)-1: break
-    
+for i_time in tqdm(range(1, len(times)), desc = 'constant rate lindbladian'):
+
     #propagate to time i 
     rho_t = solver.step(times[i_time])
 
     # update the list 
-    rho_data_ori[i_time] = rho_t
+    rho_data_ori.append(rho_t)
     coeff_11_ori[i_time] = np.abs(rho_t[0][0])
     coeff_sym_ori[i_time] = np.abs(rho_t[1][1])
     coeff_anti_ori[i_time] = np.abs(rho_t[2][2])
     coeff_00_ori[i_time] = np.abs(rho_t[3][3])
     coeff_rand_off_diag_ori[i_time] = np.abs(rho_t[0][2])
     ther_concur_ori[i_time] = thermal_concurrence(rho_t)
-    
-    # calculate the heat flow
-    d_rho= rho_data_ori[i_time] - rho_data_ori[i_time-1]
-    dt = timestep
-    product = hamiltonian @ ((d_rho) / (2 * dt))
-    heat_flow_ori.append(product.tr())
 
 # calculate the heat flow 
 d_prob_11 = coeff_11_ori[2:] - coeff_11_ori[:-2]
@@ -296,7 +287,7 @@ d_prob_sym = coeff_sym_ori[2:] - coeff_sym_ori[:-2]
 d_prob_anti = coeff_anti_ori[2:] - coeff_anti_ori[:-2]
 d_prob_00 = coeff_00_ori[2:] - coeff_00_ori[:-2]
 ham_sys_eigenval = hamiltonian.diag()
-heat_flow_test = ham_sys_eigenval[0]*d_prob_11 + ham_sys_eigenval[1]*d_prob_sym + ham_sys_eigenval[2]*d_prob_anti + ham_sys_eigenval[3]*d_prob_00
+heat_flow_ori = (ham_sys_eigenval[0]*d_prob_11 + ham_sys_eigenval[1]*d_prob_sym + ham_sys_eigenval[2]*d_prob_anti + ham_sys_eigenval[3]*d_prob_00) / (2 * timestep)
 heat_flow_time = times[1:-1]
 
 plt.plot(times, coeff_sym_test, label = 'energy diff')
