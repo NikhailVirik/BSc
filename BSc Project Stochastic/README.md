@@ -21,7 +21,7 @@ mixstate.py: (not implemented)
 
 equilibrium.py: (not implemented)
 
-cycle_ver1.py: (not implemented)
+cycle_ver1.py: (implemented)
 
 
 
