@@ -1,63 +1,3 @@
-"""
-Simple guideline to the template:
-
-
-
-necessary functions 
-
-hamiltonian_system(b_magnetic, j_qqcoupling)
-
-It takes b_magnetic as the B field, and j_qqcoupling as the coupling J term, and gives the system Hamiltonian in matrix form
-,and is diagonolised to energy eigenstate representation. Both are set to be float. 
-
-
-thermal_concurrence(den_matrix)
-
-It takes a density matrix in Qobj class, and gives the thermal concurrence of the 2 qubit systems.
-
-
-dissipator(ham_sys, scaling, temp)
-
-It takes system Hamiltonian "ham_sys", scaling factor "scaling" by the energy difference, and temperature of the bath "temp", 
-and gives the set of jump operators for Lindbladian Master Equation, and with the dissipative rate by Fermi-Golden Rule.
-
-
-heat_flow_generation(time, dt, ham_sys, coeffs_prob)
-
-Generate the rate of heat flow according to the probability evolution. The coeffs_prob needs to be a list in such manner:
-[list of 11 state, list of + state, list of - state, list of 00 state]
-The rate is calculated in central protocal, so the resulting length of the list is len(time) - 2
-Will return the modified time list 'heat_time', and the heat flow list 'heat_flow'
-
-
-
-
-necessary initialisation
-
-magnetic_strength: magnetic field strength 
-qq_coupling: coupling 
-temp: temperature of the bath
-bath_coeff: coefficient of the ohmic bath 
-cutoff_freq: cut off frequency of the ohmic bath
-constant: constant of the energy difference scaling in such form,     scaling = 1 + constant * energy difference ^2 
-
-
-
-
-Fancy ahhhhh progress bar:
-
-if you're doing a super long for loop and dunno your computer is dead or it's just running slow?
-time to implement the tqdm, by one simple step
-
-for i in tqdm(the_list, desc='what you wanna say'):
-    #your loop start
-
-EASY 
-"""
-
-
-
-
 from numbers import Complex
 from qutip import *
 from tqdm import tqdm
@@ -68,9 +8,8 @@ import matplotlib.pyplot as plt
 
 magnetic_strength = 4
 qq_coupling = 6
-temp_hot = 10
-temp_cold = 0.1
-temp_test = 1
+temp_hot = 50
+temp_cold = 5
 
 #bath characteristic
 bath_coeff = 0.05
@@ -223,22 +162,32 @@ def dissipator(ham_sys: Qobj | QobjEvo , scaling: Complex , temp: float) -> list
     return c_ops
 
 
-##############################################                    Initialisation                          #######################################################
+
+
+########################################################################################################################################################################################################################
+
+# trace through out the whole cycle
+time_total = np.linspace(0,200, 200000)
+rho_data_total = np.array([])
+heat_flow_time_total = np.array([])
+coeff_11_total = np.array([])
+coeff_sym_total = np.array([])
+coeff_anti_total = np.array([])
+coeff_00_total = np.array([])
+ther_concur_total = np.array([])
+heat_flow_total = np.array([])
+
+########## cold to hot 
 
 #time scale
 times = np.linspace(0,100,100000)
 timestep = times[1] - times[0]
 
-
-#density matrix
-rho_0 = Qobj([0])
-
-#hamiltonian
+# hamiltonian 
 hamiltonian = hamiltonian_system(magnetic_strength, qq_coupling)
 
-
-times = np.linspace(0,100,100000)
-timestep = times[1] - times[0]
+c_ops = dissipator(hamiltonian_system(-magnetic_strength, qq_coupling), 1, temp_cold)
+rho_0 = steadystate(hamiltonian_system(-magnetic_strength, qq_coupling), c_ops=c_ops)
 
 coeff_11 = np.zeros(len(times)) # trace the probability in |11>
 coeff_sym = np.zeros(len(times)) # trace the probability in |+>
@@ -257,8 +206,8 @@ coeff_rand_off_diag_real[0] = np.real(rho_0[0,2])
 coeff_rand_off_diag_imag[0] = np.imag(rho_0[0,2]) 
 ther_concur[0] = np.abs(thermal_concurrence(rho_0))
 
-###### constant rate formalism 
-c_ops = dissipator(hamiltonian, 1, temp_test)
+###### constant rate formalism, hot bath
+c_ops = dissipator(hamiltonian, 1, temp_hot)
 solver = MESolver(hamiltonian, c_ops=c_ops)
 solver.start(rho_0, times[0])
 
@@ -275,10 +224,163 @@ for i_time in tqdm(range(1, len(times)), desc = 'constant rate lindbladian'):
     coeff_00[i_time] = np.abs(rho_t[3][3])
     coeff_rand_off_diag_real[i_time] = np.real(rho_t[0][2])
     coeff_rand_off_diag_imag[i_time] = np.imag(rho_t[0][2])
-    ther_concur[i_time] = thermal_concurrence(rho_t)
+    ther_concur[i_time] = np.abs(thermal_concurrence(rho_t))
 
 # calculate the heat flow 
 coeffs_prob = [coeff_11, coeff_sym, coeff_anti, coeff_00]
 heat_flow_time, heat_flow = heat_flow_generation(times, timestep, hamiltonian, coeffs_prob)
 
-total_heat = integration_simpson(timestep, heat_flow)
+total_heat_ctoh = integration_simpson(timestep, heat_flow) # cold to hot heat
+
+
+# add to the total trace
+rho_data_total = np.append(rho_data_total, rho_data)
+coeff_11_total = np.append(coeff_11_total, coeff_11)
+coeff_sym_total = np.append(coeff_sym_total, coeff_sym)
+coeff_anti_total = np.append(coeff_anti_total, coeff_anti)
+coeff_00_total = np.append(coeff_00_total, coeff_00)
+ther_concur_total = np.append(ther_concur_total, ther_concur)
+heat_flow_total = np.append(heat_flow_total, heat_flow)
+heat_flow_time_total = np.append(heat_flow_time_total, heat_flow_time)
+
+########### adiabatic change, B -> -B
+hamiltonian_2 = hamiltonian_system(-magnetic_strength, qq_coupling)
+
+work_2 = expect(hamiltonian_2-hamiltonian, rho_data[-1])
+
+hamiltonian = hamiltonian_2
+
+########### hot to cold 
+rho_0 = rho_data[-1]
+
+coeff_11 = np.zeros(len(times)) # trace the probability in |11>
+coeff_sym = np.zeros(len(times)) # trace the probability in |+>
+coeff_anti = np.zeros(len(times)) # trace the probability in |->
+coeff_00= np.zeros(len(times)) # trace the probability in |00>
+coeff_rand_off_diag_real = np.zeros(len(times)) # trace a random off diagonal element in density matrix [0,2], real
+coeff_rand_off_diag_imag = np.zeros(len(times)) # trace a random off diagonal element in density matrix [0,2], imaginary
+ther_concur = np.zeros(len(times)) # trace the thermal concurrence
+
+rho_data = [rho_0] 
+coeff_11[0] = np.abs(rho_0[0,0]) 
+coeff_sym[0] = np.abs(rho_0[1,1])
+coeff_anti[0] = np.abs(rho_0[2,2]) 
+coeff_00[0] = np.abs(rho_0[3,3]) 
+coeff_rand_off_diag_real[0] = np.real(rho_0[0,2])
+coeff_rand_off_diag_imag[0] = np.imag(rho_0[0,2]) 
+ther_concur[0] = np.abs(thermal_concurrence(rho_0))
+
+###### constant rate formalism, hot bath
+c_ops = dissipator(hamiltonian, 1, temp_cold)
+solver = MESolver(hamiltonian, c_ops=c_ops)
+solver.start(rho_0, times[0])
+
+for i_time in tqdm(range(1, len(times)), desc = 'constant rate lindbladian 2'):
+
+    #propagate to time i 
+    rho_t = solver.step(times[i_time])
+
+    # update the list 
+    rho_data.append(rho_t)
+    coeff_11[i_time] = np.abs(rho_t[0,0])
+    coeff_sym[i_time] = np.abs(rho_t[1,1])
+    coeff_anti[i_time] = np.abs(rho_t[2,2])
+    coeff_00[i_time] = np.abs(rho_t[3,3])
+    coeff_rand_off_diag_real[i_time] = np.real(rho_t[0,2])
+    coeff_rand_off_diag_imag[i_time] = np.imag(rho_t[0,2])
+    ther_concur[i_time] = np.abs(thermal_concurrence(rho_t))
+
+# calculate the heat flow 
+coeffs_prob = [coeff_11, coeff_sym, coeff_anti, coeff_00]
+heat_flow_time, heat_flow = heat_flow_generation(times, timestep, hamiltonian, coeffs_prob)
+
+total_heat_htoc = integration_simpson(timestep, heat_flow) # hot to cold heat
+
+
+# add to the total trace
+rho_data_total = np.append(rho_data_total, rho_data)
+coeff_11_total = np.append(coeff_11_total, coeff_11)
+coeff_sym_total = np.append(coeff_sym_total, coeff_sym)
+coeff_anti_total = np.append(coeff_anti_total, coeff_anti)
+coeff_00_total = np.append(coeff_00_total, coeff_00)
+ther_concur_total = np.append(ther_concur_total, ther_concur)
+heat_flow_total = np.append(heat_flow_total, heat_flow)
+heat_flow_time_total = np.append(heat_flow_time_total, heat_flow_time + 100)
+
+################### adiabatic -B -> B
+
+hamiltonian_2 = hamiltonian_system(magnetic_strength, qq_coupling)
+
+work_4 = expect(hamiltonian_2-hamiltonian, rho_data[-1])
+
+hamiltonian = hamiltonian_2
+
+
+########################################################################################################################################################################################################################
+
+#analysis part 
+
+print("The qqsystem-bath coupling coefficients are: ",alpha,", ",beta,", ",gamma,", ",delta)
+print('magnetic field: ', magnetic_strength)
+print('qubit coupling term: ', qq_coupling)
+print('hot bath temperature: ', temp_hot)
+print('cold bath temperature: ', temp_cold)
+
+print('initial state')
+print('state |11>: ', coeff_11_total[0])
+print('state |+>: ', coeff_sym_total[0])
+print('state |->: ', coeff_anti_total[0])
+print('state |00>: ', coeff_00_total[0])
+
+
+print('final state')
+print('state |11>: ', coeff_11_total[-1])
+print('state |+>: ', coeff_sym_total[-1])
+print('state |->: ', coeff_anti_total[-1])
+print('state |00>: ', coeff_00_total[-1])
+
+
+energy_init = expect(hamiltonian, rho_data_total[0])
+energy_final = expect(hamiltonian, rho_data_total[-1])
+print('initial energy: ', energy_init)
+print('final energy', energy_final)
+print('total heat flow, cold to hot: ', total_heat_ctoh)
+print('total work don, B -> -B: ', work_2)
+print('total heat flow, hot to cold: ', total_heat_htoc)
+print('total work, -B -> B: ', work_4)
+
+firstlaw = total_heat_ctoh + work_2 + total_heat_htoc + work_4
+print('Is first law of thermodynamics verified? ', firstlaw)
+
+# ??????????????????????????????????????????????????????????????????
+
+efficiency = (work_2 + work_4) / total_heat_ctoh
+print('efficiency: ', efficiency)
+
+entropy_production = total_heat_ctoh / temp_hot  + total_heat_htoc / temp_cold
+print('entropy production: ', entropy_production)
+
+plt.plot(time_total, coeff_11_total, label=r'|11>')
+plt.plot(time_total, coeff_sym_total, label=r'|+>')
+plt.plot(time_total, coeff_anti_total, label=r'|->')
+plt.plot(time_total, coeff_00_total, label=r'|00>')
+plt.xlabel('time')
+plt.ylabel('probability')
+plt.title('probability evolution (whole cycle)')
+plt.legend()
+plt.grid()
+plt.show()
+
+plt.plot(heat_flow_time_total, heat_flow_total)
+plt.xlabel('time')
+plt.ylabel('heat flow')
+plt.title('heat flow evolution (whole cycle)')
+plt.grid()
+plt.show()
+
+plt.plot(time_total, ther_concur_total)
+plt.xlabel('time')
+plt.ylabel('thermal concurrence')
+plt.title('thermal concurrence evolution (whole cycle)')
+plt.grid()
+plt.show()

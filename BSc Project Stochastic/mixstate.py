@@ -1,63 +1,3 @@
-"""
-Simple guideline to the template:
-
-
-
-necessary functions 
-
-hamiltonian_system(b_magnetic, j_qqcoupling)
-
-It takes b_magnetic as the B field, and j_qqcoupling as the coupling J term, and gives the system Hamiltonian in matrix form
-,and is diagonolised to energy eigenstate representation. Both are set to be float. 
-
-
-thermal_concurrence(den_matrix)
-
-It takes a density matrix in Qobj class, and gives the thermal concurrence of the 2 qubit systems.
-
-
-dissipator(ham_sys, scaling, temp)
-
-It takes system Hamiltonian "ham_sys", scaling factor "scaling" by the energy difference, and temperature of the bath "temp", 
-and gives the set of jump operators for Lindbladian Master Equation, and with the dissipative rate by Fermi-Golden Rule.
-
-
-heat_flow_generation(time, dt, ham_sys, coeffs_prob)
-
-Generate the rate of heat flow according to the probability evolution. The coeffs_prob needs to be a list in such manner:
-[list of 11 state, list of + state, list of - state, list of 00 state]
-The rate is calculated in central protocal, so the resulting length of the list is len(time) - 2
-Will return the modified time list 'heat_time', and the heat flow list 'heat_flow'
-
-
-
-
-necessary initialisation
-
-magnetic_strength: magnetic field strength 
-qq_coupling: coupling 
-temp: temperature of the bath
-bath_coeff: coefficient of the ohmic bath 
-cutoff_freq: cut off frequency of the ohmic bath
-constant: constant of the energy difference scaling in such form,     scaling = 1 + constant * energy difference ^2 
-
-
-
-
-Fancy ahhhhh progress bar:
-
-if you're doing a super long for loop and dunno your computer is dead or it's just running slow?
-time to implement the tqdm, by one simple step
-
-for i in tqdm(the_list, desc='what you wanna say'):
-    #your loop start
-
-EASY 
-"""
-
-
-
-
 from numbers import Complex
 from qutip import *
 from tqdm import tqdm
@@ -66,11 +6,10 @@ import matplotlib.pyplot as plt
 
 ############# basic values 
 
-magnetic_strength = 4
-qq_coupling = 6
+magnetic_strength = 2
+qq_coupling = 1
 temp_hot = 10
-temp_cold = 0.1
-temp_test = 1
+temp_cold = 1
 
 #bath characteristic
 bath_coeff = 0.05
@@ -83,6 +22,8 @@ alpha = np.random.uniform(0,1)
 beta = np.random.uniform(0,1)
 gamma = np.random.uniform(0,1)
 delta = np.random.uniform(0,1)
+
+print("The qqsystem-bath coupling coefficients are: ",alpha,", ",beta,", ",gamma,", ",delta)
 
 
 ######################## DUMP of my func ###################################
@@ -210,7 +151,7 @@ def dissipator(ham_sys: Qobj | QobjEvo , scaling: Complex , temp: float) -> list
         for j in range(0,4):
 
             mat_el = trans_list[i,j]
-            freq_ij = ham_sys_eigen[j] - ham_sys_eigen[i]
+            freq_ij = ham_sys_eigen[i] - ham_sys_eigen[j]
 
             if not freq_ij: continue
             else:
@@ -225,20 +166,17 @@ def dissipator(ham_sys: Qobj | QobjEvo , scaling: Complex , temp: float) -> list
 
 ##############################################                    Initialisation                          #######################################################
 
-#time scale
+# time scale and time step
 times = np.linspace(0,100,100000)
 timestep = times[1] - times[0]
 
 
-#density matrix
-rho_0 = Qobj([0])
+#initial state as mixed 
 
-#hamiltonian
-hamiltonian = hamiltonian_system(magnetic_strength, qq_coupling)
+hamiltonian = hamiltonian_system(-magnetic_strength, qq_coupling)
 
-
-times = np.linspace(0,100,100000)
-timestep = times[1] - times[0]
+c_ops = dissipator(hamiltonian_system(magnetic_strength, qq_coupling), 1, temp_hot)
+rho_0 = steadystate(hamiltonian_system(magnetic_strength, qq_coupling), c_ops=c_ops)
 
 coeff_11 = np.zeros(len(times)) # trace the probability in |11>
 coeff_sym = np.zeros(len(times)) # trace the probability in |+>
@@ -257,8 +195,8 @@ coeff_rand_off_diag_real[0] = np.real(rho_0[0,2])
 coeff_rand_off_diag_imag[0] = np.imag(rho_0[0,2]) 
 ther_concur[0] = np.abs(thermal_concurrence(rho_0))
 
-###### constant rate formalism 
-c_ops = dissipator(hamiltonian, 1, temp_test)
+###### constant rate formalism, hot bath
+c_ops = dissipator(hamiltonian, 1, temp_cold)
 solver = MESolver(hamiltonian, c_ops=c_ops)
 solver.start(rho_0, times[0])
 
@@ -275,10 +213,55 @@ for i_time in tqdm(range(1, len(times)), desc = 'constant rate lindbladian'):
     coeff_00[i_time] = np.abs(rho_t[3][3])
     coeff_rand_off_diag_real[i_time] = np.real(rho_t[0][2])
     coeff_rand_off_diag_imag[i_time] = np.imag(rho_t[0][2])
-    ther_concur[i_time] = thermal_concurrence(rho_t)
+    ther_concur[i_time] = np.abs(thermal_concurrence(rho_t))
 
 # calculate the heat flow 
 coeffs_prob = [coeff_11, coeff_sym, coeff_anti, coeff_00]
 heat_flow_time, heat_flow = heat_flow_generation(times, timestep, hamiltonian, coeffs_prob)
 
-total_heat = integration_simpson(timestep, heat_flow)
+total_heat_ctoh = integration_simpson(timestep, heat_flow) # cold to hot heat
+
+
+print('final state')
+print('state |11>', coeff_11[-1])
+print('state |+>', coeff_sym[-1])
+print('state |->', coeff_anti[-1])
+print('state |00>', coeff_00[-1])
+
+
+plt.plot(times, coeff_rand_off_diag_real, label = r'(0,2) element, real part')
+plt.plot(times, coeff_rand_off_diag_imag, label = r'(0,2) element, imaginary part')
+plt.xlabel("time")
+plt.title('off diagonal terms')
+plt.legend()
+plt.grid()
+plt.show()
+
+
+plt.plot(times, coeff_11, label=r'|11>')
+plt.plot(times, coeff_sym, label=r'|+>')
+plt.plot(times, coeff_anti, label=r'|->')
+plt.plot(times, coeff_00, label=r'|00>')
+plt.xlabel('time')
+plt.ylabel('probability')
+plt.title('probability evolution (mixed state)')
+plt.legend()
+plt.grid()
+plt.show()
+
+plt.plot(heat_flow_time, heat_flow)
+plt.xlabel('time')
+plt.ylabel('heat flow')
+plt.title('heat flow evolution (mixed state)')
+plt.grid()
+plt.show()
+
+plt.plot(times, ther_concur)
+plt.xlabel('time')
+plt.ylabel('thermal concurrence')
+plt.title('thermal concurrence evolution (mixed state)')
+plt.grid()
+plt.show()
+
+######## thermal state analytical solution 
+

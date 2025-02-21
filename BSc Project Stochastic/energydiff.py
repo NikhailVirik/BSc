@@ -1,5 +1,4 @@
 from numbers import Complex
-from re import I
 from qutip import *
 from tqdm import tqdm
 import numpy as np 
@@ -59,6 +58,7 @@ def boseein_distri(trans_freq: float, temp: float) -> float:
 sigma_yy = tensor(sigmay(), sigmay())
 sigma_yy.dims = [[4],[4]]
 def thermal_concurrence(den_matrix: Qobj) -> float:
+    "Calculate the thermal concurrence of a density matrix of 2-qubit system."
 
     den_matrix_standardB = unitary_trans @ den_matrix
     den_matrix_conj = den_matrix_standardB.conj()
@@ -66,6 +66,24 @@ def thermal_concurrence(den_matrix: Qobj) -> float:
 
     lbd_coeff = concur_op.eigenenergies(sort="high") **(1/2)
     return np.max([0, lbd_coeff[0] - lbd_coeff[1] - lbd_coeff[2] - lbd_coeff[3]])
+
+# heat flow
+def heat_flow_generation(time: list[float], dt: float, ham_sys: Qobj | QobjEvo, coeffs_prob: list[list[float]]) -> tuple[list[float],list[float]]:
+    "Compute the rate of heat flow with a given set of probability coefficients"
+
+    try: coeff_1, coeff_2, coeff_3, coeff_4 = coeffs_prob
+    except: raise ValueError("Wrong number of elements in the list. Expected 4 lists")
+    
+    eigenval = ham_sys.diag()
+    dp_1 = eigenval[0] * (coeff_1[2:] - coeff_1[:-2])
+    dp_2 = eigenval[1] * (coeff_2[2:] - coeff_2[:-2])
+    dp_3 = eigenval[2] * (coeff_3[2:] - coeff_3[:-2])
+    dp_4 = eigenval[3] * (coeff_4[2:] - coeff_4[:-2])
+
+    heat_flow = (dp_1 + dp_2 + dp_3 + dp_4) / (2*dt)
+
+    heat_time = time[1:-1]
+    return heat_time, heat_flow
 
 ############# basis representation
 
@@ -141,7 +159,7 @@ def dissipator(ham_sys: Qobj | QobjEvo , scaling: Complex , temp: float) -> list
 
 
 # time scale and time step
-times = np.linspace(0,100,100000)
+times = np.linspace(0,1000,1000000)
 timestep = times[1] - times[0]
 
 
@@ -186,7 +204,7 @@ coeff_rand_off_diag_ori[0] = rho_0[0,2]
 ther_concur_ori[0] = thermal_concurrence(rho_0) 
 
 #start with steady energy state
-c_ops_steady_state = dissipator(hamiltonian, 1, temp_test)
+c_ops_steady_state = dissipator(hamiltonian, 1e-3, temp_test)
 steady_state = steadystate(hamiltonian, c_ops_steady_state)
 energy_ss = expect(hamiltonian, steady_state)
 energy_0 = expect(hamiltonian, rho_0)
@@ -199,7 +217,7 @@ for i_time in tqdm(range(1, len(times)), desc = 'energy diff lindbladian'):
 
     # update the current state expected energy of the qubits system
     energy_current = expect(hamiltonian, rho_data_test[i_time-1])
-    scaling = 1 + constant * (energy_current - energy_ss) **2
+    scaling = 1e-3 + constant * (energy_current - energy_ss) **2
     c_ops = dissipator(hamiltonian, scaling, temp_test)
 
     # solve it by QuTip MESolver, by propagation
@@ -218,13 +236,9 @@ for i_time in tqdm(range(1, len(times)), desc = 'energy diff lindbladian'):
 
 
 # calculate the heat flow
-d_prob_11 = coeff_11_test[2:] - coeff_11_test[:-2]
-d_prob_sym = coeff_sym_test[2:] - coeff_sym_test[:-2]
-d_prob_anti = coeff_anti_test[2:] - coeff_anti_test[:-2]
-d_prob_00 = coeff_00_test[2:] - coeff_00_test[:-2]
-ham_sys_eigenval = hamiltonian.diag()
-heat_flow_test = (ham_sys_eigenval[0]*d_prob_11 + ham_sys_eigenval[1]*d_prob_sym + ham_sys_eigenval[2]*d_prob_anti + ham_sys_eigenval[3]*d_prob_00) / (2 * timestep)
-heat_flow_time = times[1:-1]
+coeffs_prob = [coeff_11_test, coeff_sym_test, coeff_anti_test, coeff_00_test]
+heat_flow_time, heat_flow_test = heat_flow_generation(times, timestep, hamiltonian, coeffs_prob)
+
 
 energy_final = expect(hamiltonian,rho_data_test[-1])
 print("expected energy at final state:", energy_final)
@@ -282,13 +296,8 @@ for i_time in tqdm(range(1, len(times)), desc = 'constant rate lindbladian'):
     ther_concur_ori[i_time] = thermal_concurrence(rho_t)
 
 # calculate the heat flow 
-d_prob_11 = coeff_11_ori[2:] - coeff_11_ori[:-2]
-d_prob_sym = coeff_sym_ori[2:] - coeff_sym_ori[:-2]
-d_prob_anti = coeff_anti_ori[2:] - coeff_anti_ori[:-2]
-d_prob_00 = coeff_00_ori[2:] - coeff_00_ori[:-2]
-ham_sys_eigenval = hamiltonian.diag()
-heat_flow_ori = (ham_sys_eigenval[0]*d_prob_11 + ham_sys_eigenval[1]*d_prob_sym + ham_sys_eigenval[2]*d_prob_anti + ham_sys_eigenval[3]*d_prob_00) / (2 * timestep)
-heat_flow_time = times[1:-1]
+coeffs_prob = [coeff_11_ori, coeff_sym_ori, coeff_anti_ori, coeff_00_ori]
+heat_flow_time, heat_flow_ori = heat_flow_generation(times, timestep, hamiltonian, coeffs_prob)
 
 plt.plot(times, coeff_sym_test, label = 'energy diff')
 plt.plot(times, coeff_sym_ori, label = 'original')

@@ -145,7 +145,7 @@ for i in range(0,len(data)):
 N=len(times)-1
 if N%2==0:
     raise ValueError('Even number of terms pls')
-integral = heat_f[0]-heat_f[-1]
+integral = heat_f[0]+heat_f[-1]
 integral += 4 * np.sum(heat_f[1:N:2])
 integral += 2*np.sum(heat_f[2:N-1:2])
 Heat = (step/3)*integral
