@@ -1,5 +1,4 @@
 from numbers import Complex
-from re import I
 from qutip import *
 from tqdm import tqdm
 import numpy as np 
@@ -66,6 +65,25 @@ def thermal_concurrence(den_matrix: Qobj) -> float:
 
     lbd_coeff = concur_op.eigenenergies(sort="high") **(1/2)
     return np.max([0, lbd_coeff[0] - lbd_coeff[1] - lbd_coeff[2] - lbd_coeff[3]])
+
+# heat flow
+def heat_flow_generation(time: list[float], dt: float, ham_sys: Qobj | QobjEvo, coeffs_prob: list[list[float]]) -> tuple[list[float],list[float]]:
+    "Compute the rate of heat flow with a given set of probability coefficients"
+
+    try: coeff_1, coeff_2, coeff_3, coeff_4 = coeffs_prob
+    except: raise ValueError("Wrong number of elements in the list. Expected 4 lists")
+    
+    eigenval = ham_sys.diag()
+    dp_1 = eigenval[0] * (coeff_1[2:] - coeff_1[:-2])
+    dp_2 = eigenval[1] * (coeff_2[2:] - coeff_2[:-2])
+    dp_3 = eigenval[2] * (coeff_3[2:] - coeff_3[:-2])
+    dp_4 = eigenval[3] * (coeff_4[2:] - coeff_4[:-2])
+
+    heat_flow = (dp_1 + dp_2 + dp_3 + dp_4) / (2*dt)
+
+    heat_time = time[1:-1]
+    return heat_time, heat_flow
+
 
 ############# basis representation
 
