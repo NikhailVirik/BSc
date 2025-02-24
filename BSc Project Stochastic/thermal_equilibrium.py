@@ -1,4 +1,3 @@
-from http.client import PROXY_AUTHENTICATION_REQUIRED
 from numbers import Complex
 from qutip import *
 from tqdm import tqdm
@@ -11,11 +10,12 @@ magnetic_strength = 2
 qq_coupling = 1
 temp_hot = 10
 temp_cold = 0.1
-temp_test = 0.01
+temp_test = 1000
+
 
 #bath characteristic
 bath_coeff = 0.05
-cutoff_freq = 100
+cutoff_freq = 100000
 
 constant = 0.5
 
@@ -167,6 +167,13 @@ thermal_state_0 = Qobj(thermal_state)
 hamiltonian = hamiltonian_system(magnetic_strength, qq_coupling)
 c_ops = dissipator(hamiltonian, 1, temp_test)
 
+steady_state = steadystate(hamiltonian, c_ops)
+
+print(thermal_state)
+print('')
+print(steady_state)
+
+"""
 times = np.linspace(0,100,100000)
 timestep = times[1] - times[0]
 
@@ -249,4 +256,4 @@ plt.xlabel('time')
 plt.ylabel('thermal concurrence')
 plt.title('thermal concurrence evolution (thermal state)')
 plt.grid()
-plt.show()
+plt.show()"""

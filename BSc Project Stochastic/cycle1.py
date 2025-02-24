@@ -6,8 +6,13 @@ import matplotlib.pyplot as plt
 
 ############# basic values 
 
-magnetic_strength = 10
-qq_coupling = 2
+#time scale
+times = np.linspace(0,100,100000)
+timestep = times[1] - times[0]
+
+magnetic_strength_1 = -10
+magnetic_strength_2 = 10
+qq_coupling = 10
 temp_hot = 50
 temp_cold = 10
 
@@ -15,15 +20,13 @@ temp_cold = 10
 bath_coeff = 0.05
 cutoff_freq = 100000
 
-constant = 1; constant2 = 0.5
+constant = 0.5
 
 # coefficients of the qubit operations
 alpha = np.random.uniform(0,1)
 beta = np.random.uniform(0,1)
 gamma = np.random.uniform(0,1)
 delta = np.random.uniform(0,1)
-
-print("The qqsystem-bath coupling coefficients are: ",alpha,", ",beta,", ",gamma,", ",delta)
 
 
 ######################## DUMP of my func ###################################
@@ -151,7 +154,7 @@ def dissipator(ham_sys: Qobj | QobjEvo , scaling: Complex , temp: float) -> list
         for j in range(0,4):
 
             mat_el = trans_list[i,j]
-            freq_ij = ham_sys_eigen[i] - ham_sys_eigen[j]
+            freq_ij = ham_sys_eigen[j] - ham_sys_eigen[i]
 
             if not freq_ij: continue
             else:
@@ -164,137 +167,60 @@ def dissipator(ham_sys: Qobj | QobjEvo , scaling: Complex , temp: float) -> list
     return c_ops
 
 
-##############################################                    Initialisation                          #######################################################
-
-# time scale and time step
-times = np.linspace(0,100,100000)
-timestep = times[1] - times[0]
 
 
-#initial state as mixed 
-
-hamiltonian = hamiltonian_system(-magnetic_strength, qq_coupling)
-
-c_ops = dissipator(hamiltonian_system(magnetic_strength, qq_coupling), 1, temp_hot)
-rho_0 = steadystate(hamiltonian_system(magnetic_strength, qq_coupling), c_ops=c_ops)
-
-coeff_11 = np.zeros(len(times)) # trace the probability in |11>
-coeff_sym = np.zeros(len(times)) # trace the probability in |+>
-coeff_anti = np.zeros(len(times)) # trace the probability in |->
-coeff_00= np.zeros(len(times)) # trace the probability in |00>
-coeff_rand_off_diag_real = np.zeros(len(times)) # trace a random off diagonal element in density matrix [0,2], real
-coeff_rand_off_diag_imag = np.zeros(len(times)) # trace a random off diagonal element in density matrix [0,2], imaginary
-ther_concur = np.zeros(len(times)) # trace the thermal concurrence
-
-rho_data = [rho_0] 
-coeff_11[0] = np.abs(rho_0[0,0]) 
-coeff_sym[0] = np.abs(rho_0[1,1])
-coeff_anti[0] = np.abs(rho_0[2,2]) 
-coeff_00[0] = np.abs(rho_0[3,3]) 
-coeff_rand_off_diag_real[0] = np.real(rho_0[0,2])
-coeff_rand_off_diag_imag[0] = np.imag(rho_0[0,2]) 
-ther_concur[0] = np.abs(thermal_concurrence(rho_0))
-
-#start with steady energy state
-c_ops_steady_state = dissipator(hamiltonian, constant, temp_cold)
-steady_state = steadystate(hamiltonian, c_ops_steady_state)
-energy_ss = expect(hamiltonian, steady_state)
-energy_0 = expect(hamiltonian, rho_0)
-print('expected energy at steady state:', energy_ss)
-print('expected energy at initial state:', energy_0)
+########################################################################################################################################################################################################################
 
 
-# solve it and obtain the evolution, energy diff terms 
-for i_time in tqdm(range(1, len(times)), desc = 'energy diff lindbladian'):
+# steady state formalism 
 
-    # update the current state expected energy of the qubits system
-    energy_current = expect(hamiltonian, rho_data[i_time-1])
-    scaling = constant + constant2 * (energy_current - energy_ss) **2
-    c_ops = dissipator(hamiltonian, scaling, temp_cold)
+# cold to hot 
 
-    # solve it by QuTip MESolver, by propagation
-    solver = MESolver(hamiltonian, c_ops = c_ops)
-    solver.start(rho_data[i_time-1], times[i_time-1])
-    rho_t = solver.step(times[i_time])
-    
-    # update the data
-    rho_data.append(rho_t)
-    coeff_11[i_time] = np.abs(rho_t[0][0])
-    coeff_sym[i_time] = np.abs(rho_t[1][1])
-    coeff_anti[i_time] = np.abs(rho_t[2][2])
-    coeff_00[i_time] = np.abs(rho_t[3][3])
-    
-    ther_concur[i_time] = thermal_concurrence(rho_t)
+state = steadystate(hamiltonian_system(magnetic_strength_2, qq_coupling), dissipator(hamiltonian_system(magnetic_strength_2, qq_coupling), 1, temp_cold))
 
+hamiltonian = hamiltonian_system(magnetic_strength_1, qq_coupling)
 
-"""
-###### constant rate formalism, hot bath
-c_ops = dissipator(hamiltonian, 1, temp_cold)
-solver = MESolver(hamiltonian, c_ops=c_ops)
-solver.start(rho_0, times[0])
+state_after = steadystate(hamiltonian, dissipator(hamiltonian, 1, temp_hot))
 
-for i_time in tqdm(range(1, len(times)), desc = 'constant rate lindbladian'):
+heat_1 = expect(hamiltonian, state_after - state)
 
-    #propagate to time i 
-    rho_t = solver.step(times[i_time])
+state = state_after
 
-    # update the list 
-    rho_data.append(rho_t)
-    coeff_11[i_time] = np.abs(rho_t[0][0])
-    coeff_sym[i_time] = np.abs(rho_t[1][1])
-    coeff_anti[i_time] = np.abs(rho_t[2][2])
-    coeff_00[i_time] = np.abs(rho_t[3][3])
-    coeff_rand_off_diag_real[i_time] = np.real(rho_t[0][2])
-    coeff_rand_off_diag_imag[i_time] = np.imag(rho_t[0][2])
-    ther_concur[i_time] = np.abs(thermal_concurrence(rho_t))
-"""
-# calculate the heat flow 
-coeffs_prob = [coeff_11, coeff_sym, coeff_anti, coeff_00]
-heat_flow_time, heat_flow = heat_flow_generation(times, timestep, hamiltonian, coeffs_prob)
+# adiabatic
 
-total_heat = integration_simpson(timestep, heat_flow) # cold to hot heat
+hamiltonian_new = hamiltonian_system(magnetic_strength_2, qq_coupling)
 
+work_2 = expect(hamiltonian_new - hamiltonian, state)
 
-print('final state')
-print('state |11>', coeff_11[-1])
-print('state |+>', coeff_sym[-1])
-print('state |->', coeff_anti[-1])
-print('state |00>', coeff_00[-1])
+hamiltonian = hamiltonian_new
 
-print(total_heat)
-"""plt.plot(times, coeff_rand_off_diag_real, label = r'(0,2) element, real part')
-plt.plot(times, coeff_rand_off_diag_imag, label = r'(0,2) element, imaginary part')
-plt.xlabel("time")
-plt.title('off diagonal terms')
-plt.legend()
-plt.grid()
-plt.show()"""
+# hot to cold 
 
+state_after = steadystate(hamiltonian, dissipator(hamiltonian, 1, temp_cold))
 
-plt.plot(times, coeff_11, label=r'|11>')
-plt.plot(times, coeff_sym, label=r'|+>')
-plt.plot(times, coeff_anti, label=r'|->')
-plt.plot(times, coeff_00, label=r'|00>')
-plt.xlabel('time')
-plt.ylabel('probability')
-plt.title('probability evolution (mixed state)')
-plt.legend()
-plt.grid()
-plt.show()
+heat_3 = expect(hamiltonian, state_after - state)
 
-plt.plot(heat_flow_time, heat_flow)
-plt.xlabel('time')
-plt.ylabel('heat flow')
-plt.title('heat flow evolution (mixed state)')
-plt.grid()
-plt.show()
+state = state_after 
 
-plt.plot(times, ther_concur)
-plt.xlabel('time')
-plt.ylabel('thermal concurrence')
-plt.title('thermal concurrence evolution (mixed state)')
-plt.grid()
-plt.show()
+# adiabtic 
 
-######## thermal state analytical solution 
+hamiltonian_new = hamiltonian_system(magnetic_strength_1, qq_coupling)
 
+work_4 = expect(hamiltonian_new - hamiltonian, state)
+
+###########
+print("The qqsystem-bath coupling coefficients are: ",alpha,", ",beta,", ",gamma,", ",delta)
+
+print('heat flow 1 ', heat_1)
+print('work done 2 ', work_2)
+print('heat flow 3 ', heat_3)
+print('work done 4 ', work_4)
+
+firstlaw = heat_1+ heat_3 + work_2 + work_4
+print('total energy change ', firstlaw)
+
+entropy_production = -(heat_1/ temp_hot + heat_3 / temp_cold)
+print('entropy production ', entropy_production)
+
+efficiency = (work_2 + work_4) / sum([i for i in [heat_1, heat_3] if i > 0])
+print('engine efficiency ', efficiency)

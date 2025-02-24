@@ -6,17 +6,18 @@ import matplotlib.pyplot as plt
 
 ############# basic values 
 
-magnetic_strength = 4
-qq_coupling = 6
+magnetic_strength = 1
+qq_coupling = 2
 temp_hot = 10
 temp_cold = 0.1
 temp_test = 1
 
 #bath characteristic
 bath_coeff = 0.05
-cutoff_freq = 100
+cutoff_freq = 10000
 
-constant = 0.5
+constant = 1
+constant2 = 0.5
 
 # coefficients of the qubit operations
 alpha = np.random.uniform(0,1)
@@ -27,7 +28,21 @@ delta = np.random.uniform(0,1)
 print("The qqsystem-bath coupling coefficients are: ",alpha,", ",beta,", ",gamma,", ",delta)
 
 
+# time scale and time step
+times = np.linspace(0,100,100000)
+timestep = times[1] - times[0]
+
 ######################## DUMP of my func ###################################
+
+def integration_simpson(n_step: float, diff_list: list[float]) -> float:
+    "numerical integration by Simpson's 1/3 rule "
+    total_step = len(diff_list)
+    if total_step%2: raise ValueError("Even number of elements in the differential list is required.")
+
+    integral = diff_list[0] + diff_list[-1]
+    integral += 4 * np.sum(diff_list[2:total_step:2])
+    integral += 2 * np.sum(diff_list[3:total_step-1:2])
+    return integral * n_step / 3
 
 def hamiltonian_system(b_magnetic: float, j_qqcoupling: float) -> Qobj:
     "System Hamiltonian in energyeigenstate representation with constant B and J terms"
@@ -142,7 +157,7 @@ def dissipator(ham_sys: Qobj | QobjEvo , scaling: Complex , temp: float) -> list
         for j in range(0,4):
 
             mat_el = trans_list[i,j]
-            freq_ij = ham_sys_eigen[i] - ham_sys_eigen[j]
+            freq_ij = ham_sys_eigen[j] - ham_sys_eigen[i]
 
             if not freq_ij: continue
             else:
@@ -156,12 +171,6 @@ def dissipator(ham_sys: Qobj | QobjEvo , scaling: Complex , temp: float) -> list
 
 
 ##############################################                    Initialisation   (test)                 #######################################################
-
-
-# time scale and time step
-times = np.linspace(0,1000,1000000)
-timestep = times[1] - times[0]
-
 
 #random initial rho density (changeable)
 initial_pure = Qobj([[.5],[1/np.sqrt(2)],[0],[.5]])
@@ -204,7 +213,7 @@ coeff_rand_off_diag_ori[0] = rho_0[0,2]
 ther_concur_ori[0] = thermal_concurrence(rho_0) 
 
 #start with steady energy state
-c_ops_steady_state = dissipator(hamiltonian, 1e-3, temp_test)
+c_ops_steady_state = dissipator(hamiltonian, constant, temp_test)
 steady_state = steadystate(hamiltonian, c_ops_steady_state)
 energy_ss = expect(hamiltonian, steady_state)
 energy_0 = expect(hamiltonian, rho_0)
@@ -217,7 +226,7 @@ for i_time in tqdm(range(1, len(times)), desc = 'energy diff lindbladian'):
 
     # update the current state expected energy of the qubits system
     energy_current = expect(hamiltonian, rho_data_test[i_time-1])
-    scaling = 1e-3 + constant * (energy_current - energy_ss) **2
+    scaling = constant + constant2 * (energy_current - energy_ss) **2
     c_ops = dissipator(hamiltonian, scaling, temp_test)
 
     # solve it by QuTip MESolver, by propagation
@@ -238,9 +247,10 @@ for i_time in tqdm(range(1, len(times)), desc = 'energy diff lindbladian'):
 # calculate the heat flow
 coeffs_prob = [coeff_11_test, coeff_sym_test, coeff_anti_test, coeff_00_test]
 heat_flow_time, heat_flow_test = heat_flow_generation(times, timestep, hamiltonian, coeffs_prob)
+total_heat_new = integration_simpson(timestep, heat_flow_test)
 
 
-energy_final = expect(hamiltonian,rho_data_test[-1])
+energy_final = expect(hamiltonian ,rho_data_test[-1])
 print("expected energy at final state:", energy_final)
 print('final state')
 print('state |11>', coeff_11_test[-1])
@@ -298,12 +308,13 @@ for i_time in tqdm(range(1, len(times)), desc = 'constant rate lindbladian'):
 # calculate the heat flow 
 coeffs_prob = [coeff_11_ori, coeff_sym_ori, coeff_anti_ori, coeff_00_ori]
 heat_flow_time, heat_flow_ori = heat_flow_generation(times, timestep, hamiltonian, coeffs_prob)
+total_heat_constant = integration_simpson(timestep, heat_flow_ori)
 
-plt.plot(times, coeff_sym_test, label = 'energy diff')
-plt.plot(times, coeff_sym_ori, label = 'original')
+plt.plot(times, coeff_anti_test, label = 'energy diff')
+plt.plot(times, coeff_anti_ori, label = 'original')
 plt.xlabel('time')
 plt.ylabel('probability')
-plt.title(r'evolution of probability in state |+>')
+plt.title(r'evolution of probability in state |->')
 plt.legend()
 plt.grid()
 plt.show()
@@ -317,7 +328,7 @@ plt.grid()
 plt.legend()
 plt.show()
 
-plt.plot(times[0::1000], ther_concur_test[0::1000], 'rx',  label = 'energy diff')
+"""plt.plot(times[0::1000], ther_concur_test[0::1000], 'rx',  label = 'energy diff')
 plt.plot(times[0::1000], ther_concur_ori[0::1000], 'b.', label = 'original')
 plt.xlabel('time')
 plt.ylabel('thermal concurrence')
@@ -325,3 +336,10 @@ plt.title('thermal concurrence evolution')
 plt.grid()
 plt.legend()
 plt.show()
+"""
+
+print(total_heat_new)
+print(total_heat_constant)
+
+hypothetical_heat = expect(hamiltonian, steady_state - rho_0)
+print(hypothetical_heat)

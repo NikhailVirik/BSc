@@ -6,14 +6,19 @@ import matplotlib.pyplot as plt
 
 ############# basic values 
 
-magnetic_strength = 4
-qq_coupling = 6
+#time scale
+times = np.linspace(0,100,100000)
+timestep = times[1] - times[0]
+
+magnetic_strength_1 = 3
+magnetic_strength_2 = 5
+qq_coupling = 10
 temp_hot = 50
-temp_cold = 5
+temp_cold = 10
 
 #bath characteristic
 bath_coeff = 0.05
-cutoff_freq = 100
+cutoff_freq = 100000
 
 constant = 0.5
 
@@ -179,15 +184,11 @@ heat_flow_total = np.array([])
 
 ########## cold to hot 
 
-#time scale
-times = np.linspace(0,100,100000)
-timestep = times[1] - times[0]
-
 # hamiltonian 
-hamiltonian = hamiltonian_system(magnetic_strength, qq_coupling)
+hamiltonian = hamiltonian_system(magnetic_strength_1, qq_coupling)
 
-c_ops = dissipator(hamiltonian_system(-magnetic_strength, qq_coupling), 1, temp_cold)
-rho_0 = steadystate(hamiltonian_system(-magnetic_strength, qq_coupling), c_ops=c_ops)
+c_ops = dissipator(hamiltonian_system(magnetic_strength_2, qq_coupling), 1, temp_cold)
+rho_0 = steadystate(hamiltonian_system(magnetic_strength_2, qq_coupling), c_ops=c_ops)
 
 coeff_11 = np.zeros(len(times)) # trace the probability in |11>
 coeff_sym = np.zeros(len(times)) # trace the probability in |+>
@@ -244,7 +245,7 @@ heat_flow_total = np.append(heat_flow_total, heat_flow)
 heat_flow_time_total = np.append(heat_flow_time_total, heat_flow_time)
 
 ########### adiabatic change, B -> -B
-hamiltonian_2 = hamiltonian_system(-magnetic_strength, qq_coupling)
+hamiltonian_2 = hamiltonian_system(magnetic_strength_2, qq_coupling)
 
 work_2 = expect(hamiltonian_2-hamiltonian, rho_data[-1])
 
@@ -282,12 +283,12 @@ for i_time in tqdm(range(1, len(times)), desc = 'constant rate lindbladian 2'):
 
     # update the list 
     rho_data.append(rho_t)
-    coeff_11[i_time] = np.abs(rho_t[0,0])
-    coeff_sym[i_time] = np.abs(rho_t[1,1])
-    coeff_anti[i_time] = np.abs(rho_t[2,2])
-    coeff_00[i_time] = np.abs(rho_t[3,3])
-    coeff_rand_off_diag_real[i_time] = np.real(rho_t[0,2])
-    coeff_rand_off_diag_imag[i_time] = np.imag(rho_t[0,2])
+    coeff_11[i_time] = np.abs(rho_t[0][0])
+    coeff_sym[i_time] = np.abs(rho_t[1][1])
+    coeff_anti[i_time] = np.abs(rho_t[2][2])
+    coeff_00[i_time] = np.abs(rho_t[3][3])
+    coeff_rand_off_diag_real[i_time] = np.real(rho_t[0][2])
+    coeff_rand_off_diag_imag[i_time] = np.imag(rho_t[0][2])
     ther_concur[i_time] = np.abs(thermal_concurrence(rho_t))
 
 # calculate the heat flow 
@@ -309,7 +310,7 @@ heat_flow_time_total = np.append(heat_flow_time_total, heat_flow_time + 100)
 
 ################### adiabatic -B -> B
 
-hamiltonian_2 = hamiltonian_system(magnetic_strength, qq_coupling)
+hamiltonian_2 = hamiltonian_system(magnetic_strength_1, qq_coupling)
 
 work_4 = expect(hamiltonian_2-hamiltonian, rho_data[-1])
 
@@ -318,10 +319,8 @@ hamiltonian = hamiltonian_2
 
 ########################################################################################################################################################################################################################
 
-#analysis part 
-
 print("The qqsystem-bath coupling coefficients are: ",alpha,", ",beta,", ",gamma,", ",delta)
-print('magnetic field: ', magnetic_strength)
+print('magnetic field: ', magnetic_strength_1, '&', magnetic_strength_2)
 print('qubit coupling term: ', qq_coupling)
 print('hot bath temperature: ', temp_hot)
 print('cold bath temperature: ', temp_cold)
@@ -352,13 +351,11 @@ print('total work, -B -> B: ', work_4)
 firstlaw = total_heat_ctoh + work_2 + total_heat_htoc + work_4
 print('Is first law of thermodynamics verified? ', firstlaw)
 
-# ??????????????????????????????????????????????????????????????????
+entropy_prodution = - (total_heat_ctoh / temp_hot + total_heat_htoc / temp_cold)
+print(entropy_prodution)
 
-efficiency = (work_2 + work_4) / total_heat_ctoh
-print('efficiency: ', efficiency)
-
-entropy_production = total_heat_ctoh / temp_hot  + total_heat_htoc / temp_cold
-print('entropy production: ', entropy_production)
+efficiency = (work_2 + work_4)/ sum([i for i in [total_heat_ctoh,total_heat_htoc] if i > 0])
+print(efficiency)
 
 plt.plot(time_total, coeff_11_total, label=r'|11>')
 plt.plot(time_total, coeff_sym_total, label=r'|+>')
